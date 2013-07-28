@@ -67,21 +67,14 @@ class matrix:
     
     def __mul__(self, other):
         res = matrix([[]])
-        # check if correct dimensions
-        if isinstance(other, (int, long, float)):
-            res.zero(self.dimx, self.dimy)
-            for i in range(self.dimx):
-                for j in range(self.dimy):
-                    res.value[i][j] = self.value[i][j] * other
+        if self.dimy != other.dimx:
+          raise ValueError, "Matrices must be m*n and n*p to multiply"
         else:
-          if self.dimy != other.dimx:
-              raise ValueError, "Matrices must be m*n and n*p to multiply"
-          else:
-              res.zero(self.dimx, other.dimy)
-              for i in range(self.dimx):
-                  for j in range(other.dimy):
-                      for k in range(self.dimy):
-                          res.value[i][j] += self.value[i][k] * other.value[k][j]
+          res.zero(self.dimx, other.dimy)
+          for i in range(self.dimx):
+              for j in range(other.dimy):
+                  for k in range(self.dimy):
+                      res.value[i][j] += self.value[i][k] * other.value[k][j]
         return res
     
     def transpose(self):
@@ -148,16 +141,16 @@ class matrix:
 def filter(x, P):
     for n in range(len(measurements)):
         # measurement update
-        y = measurements[n]  - (H * x).value[0][0]
+        y = matrix([[measurements[n]]])  - (H * x)
         S = H * P * H.transpose() + R
         K = P * H.transpose() * S.inverse()
         x = x + (K * y)
         P = ( I - K * H) * P
         # prediction
         x = F * x + u
-        P = F * P * F.transpose()
         print 'x= '
         x.show()
+        P = F * P * F.transpose()
         print 'P= '
         P.show()
 
