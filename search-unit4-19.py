@@ -46,7 +46,8 @@ cost = [2, 1, 20] # the cost field has 3 values: right turn, no turn, left turn
 forward = [[-1,  0], # go up
            [ 0, -1], # go left
            [ 1,  0], # go down
-           [ 0,  1]] # do right
+           [ 0,  1]] # go right
+
 forward_name = ['up', 'left', 'down', 'right']
 
 # the cost field has 3 values: right turn, no turn, left turn
@@ -66,9 +67,9 @@ def optimum_policy2D():
   change = True
   while change:
     change = False
-    for d in range(len(value)):
+    for d in range(len(value)): # all orientations
       for x in range(len(value[d])):
-        for y in range(len(value[d][x])):
+        for y in range(len(value[d][x])): #all positions
           # check for goal
           if goal[0] is x and goal[1] is y:
             if value[d][x][y] > 0:
@@ -76,29 +77,49 @@ def optimum_policy2D():
               change = True
           # this grid space is navigable
           elif grid[x][y] is 0:
-            # iterate over the pos/orientations that could move here
-            for a in action:
-              # when we go backwards in time, a right turn because a left turn
-              prev_d = (d - a) % len(forward)
-              f = forward[prev_d]
-              x2 = x - f[0]
-              y2 = x - f[1]
-              if x2 < 0 or x2 >= len(value[d]) or y2 < 0 or y2 >= len(value[d][x]) or grid[x2][y2] is not 0: 
-                continue
-              v2 = value[d][x][y] + cost[a]
-              print "v2", v2
-              if value[prev_d][x2][y2] > v2:
-                value[prev_d][x2][y2] = v2
+            for a in range(len(action)):
+              d2 = (d + action[a]) % len(forward)
+              f = forward[d2]
+              x2 = x + f[0]
+              y2 = y + f[1]
+              # check if the grid pos is not navigable
+              if x2 < 0 or x2 >= len(value[d2]): continue
+              if y2 < 0 or y2 >= len(value[d2][x]): continue
+              if grid[x2][y2] is not 0: continue
+              v2 = value[d2][x2][y2] + cost[a]
+              if v2 < value[d][x][y]:
+                value[d][x][y] = v2
                 change = True
-  
-  # TODO: fix value (all values 999 expect goal)
-  for orient in range(len(value)):
-    print "orient:", orient
-    for o in value[orient]:
-      print o
-  
-  policy2D = [ [' ' for row in range(len(grid[0]))] for col in range(len(grid)) ]
-  return policy2D # Make sure your function returns the expected grid.
+  # trace the best policy
+  policy = [ [' ' for row in range(len(grid[0]))] for col in range(len(grid)) ]
+  home = False
+  pos = [init[0], init[1], init[2]]
+  while not home:
+    cheapest = None
+    cheapest_turn = None
+    for a in range(len(action)):
+      d2 = (pos[2] + action[a]) % len(forward)
+      f = forward[d2]
+      x2 = pos[0] + f[0]
+      y2 = pos[1] + f[1]
+      if x2 < 0 or x2 >= len(value[d2]): continue
+      if y2 < 0 or y2 >= len(value[d2][x]): continue
+      if grid[x2][y2] is not 0: continue
+      if x2 is goal[0] and y2 is goal[1]:
+        policy[x2][y2] = '*'
+        home = True
+      v2 = value[d2][x2][y2]
+      if not cheapest or v2 + cost[a] < value[cheapest[2]][cheapest[0]][cheapest[1]] + cost[cheapest_turn]:
+        cheapest = [x2, y2, d2]
+        cheapest_turn = a
+    if cheapest is None: home = True
+    policy[pos[0]][pos[1]] = action_name[cheapest_turn]
+    pos = cheapest
 
 
-optimum_policy2D()
+  return policy
+
+policy = optimum_policy2D()
+
+for row in policy:
+  print row
