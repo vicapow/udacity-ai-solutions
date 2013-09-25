@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="d3.v3.min.js" charset="utf-8"></script>
+    <style>
+      svg.vis{
+
+      }
+      circle.point{
+      }
+      html, body{
+        margin: 0;
+      }
+      path.track, line.track{
+        stroke: blue;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="text/javascript">
+
+"use strict";
+
+function gaussian(mean, stdev){
+  // see: http://www.protonfish.com/random.shtml
+  var normal = (Math.random()*2-1)+(Math.random()*2-1)+(Math.random()*2-1)
+  return normal * stdev + mean
+}
+
+var Robot = function(length){
+  if(typeof length === 'undefined') length = 20
+  this.length = length
+  this.x = 0
+  this.y = 0
+  this.orientation = 0.0
+  this.length = length
+  this.steering_noise = 0.0
+  this.distance_noise = 0.0
+  this.steering_drift = 0.0
+}
+
+Robot.prototype.set = function(x, y, orientation){
+  this.x = x
+  this.y = y
+  this.orientation = orientation % (2.0 * Math.PI)
+}
+
+Robot.prototype.set_noise = function(s_noise, d_noise){
+  this.steering_noise = float(s_noise)
+  this.distance_noise = float(s_noise)
+}
+
+Robot.prototype.set_steering_drift = function(drift){
+  this.steering_drift = drift
+}
+
+Robot.prototype.move = function(steering, distance, tolerance, max_steering_angle){
+  if(typeof tolerance === 'undefined') tolerance = 0.001
+  if(typeof max_steering_angle === 'undefined') max_steering_angle = Math.PI / 4.0
+  if(steering > max_steering_angle) steering = max_steering_angle
+  if(steering < -max_steering_angle) steering = - max_steering_angle
+  if(distance < 0.0) distance = 0.0
+  // unlike the original Udacity code, lets not create a new robot every time
+  
+  // apply noise
+  var steering2 = gaussian(steering, this.steering_noise)
+  var distance2 = gaussian(distance, this.distance_noise)
+
+  // apply steering drift
+  steering2 += this.steering_drift
+
+  // Execute motion
+  var turn = Math.tan(steering2) * distance2 / this.length
+
+  if(Math.abs(turn) < tolerance){
+    // approximate by straight line motion
+    this.x = this.x + (distance2 * Math.cos(this.orientation))
+    this.y = this.y + (distance2 * Math.sin(this.orientation))
+    this.orientation = (this.orientation + turn) % (2.0 * Math.PI)
+  }else{
+    var radius = distance2 / turn
+    var cx = this.x - Math.sin(this.orientation) * radius
+    var cy = this.y + Math.cos(this.orientation) * radius
+    this.orientation = (this.orientation + turn) % (2.0 * Math.PI)
+    this.x = cx + Math.sin(this.orientation) * radius
+    this.y = cy - Math.cos(this.orientation) * radius
+  }
+  return this
+}
+
+Robot.prototype.cte = function(radius){
+  // `radius` is the turning radius of the track described in the explanation 
+  // video which looks like a running track, with two curved halves or 
+  // radius = `radius` and a straight section in the middle of length r * 2
+
+  // when the vehicle is at the edges, have it act like a circle
+  var x, y, d, ctx
+  if(this.x < radius){
+    x = this.x - radius
+    y = this.y - radius
+    d = Math.sqrt( x * x + y * y)
+    ctx = d - radius
+  }else if(this.x > radius * 3){
+    x = this.x - radius * 3
+    y = this.y - radius
+    d = Math.sqrt( x * x + y * y)
+    ctx = d - radius
+  }
+  // otherwise, it should act like its along a straight line
+  else if(this.y > radius) ctx = this.y - 2 * radius
+  else ctx = - this.y
+  return ctx
+}
+
+Robot.prototype.toString = function(){
+  return '[x=' + this.x + ' y=' + this.y + ' orient=' + this.orientation + ']'
+}
+
+var radius = 25.0
+  , track_width = radius * 4
+  , track_height = radius * 2
+  , params = [10.0, 15.0, 0]
+  , speed = 1
+  , myrobot = new Robot()
+  , printFlag = false
+  , err = 0
+  , int_crosstrack_error = 0
+  , crosstrack_error
+  , diff_crosstrack_error
+  , steer
+  , N = 200
+  , i = 0
+
+myrobot.set(0.0, radius, Math.PI / 2.0)
+crosstrack_error = myrobot.cte(radius)
+
+function iterate(){
+  diff_crosstrack_error = - crosstrack_error
+  crosstrack_error = myrobot.cte(radius)
+  console.log('cross track error', crosstrack_error)
+  diff_crosstrack_error += crosstrack_error
+  int_crosstrack_error += crosstrack_error
+  steer = - params[0] * crosstrack_error
+          - params[1] * diff_crosstrack_error
+          - params[2] * int_crosstrack_error
+  myrobot.move(steer, speed)
+  if(i >= N){
+    err += crosstrack_error * crosstrack_error
+    if(printFlag) console.log(myrobot)
+  }
+  i++
+}
+
+console.log('err', err)
+console.log('N', N)
+console.log('error', err / N)
+
+
+var w = window.innerWidth, h = window.innerWidth, margin = 0
+  , svg = d3.select('body').append('svg')
+  .attr({
+    'class' : 'vis'
+    , width: w
+    , height: h
+    , 'shape-rendering': 'crisp-edges'
+  })
+  , x = d3.scale.linear().domain([0, track_width]).range([margin, w - margin * 2])
+
+var dot = svg.append('circle')
+
+dot.style('fill', 'steelblue')
+  .attr('r', '10px')
+update()
+
+function update(){
+  dot.attr({
+    cx: x(myrobot.x)
+    , cy: x(myrobot.y)
+  })
+}
+
+setInterval(function(){
+  iterate()
+  update()
+}, 100)
+
+var arc = d3.svg.arc().innerRadius(x(radius)).outerRadius(x(radius))
+var track = svg.append('g')
+track.attr('transform', 'translate(' + x(radius) + ',' + x(radius) + ')')
+track.append('path')
+  .attr('class', 'track')
+  .attr('d', arc.startAngle(0).endAngle(-Math.PI))
+
+track.append('path')
+  .attr('class', 'track')
+  .attr('transform', 'translate(' + x(radius * 2) + ',0)')
+  .attr('d', arc.startAngle(Math.PI).endAngle(0))
+
+track.append('line')
+  .attr('class', 'track')
+  .attr('x1', x(radius))
+  .attr('y1', x(0))
+  .attr('x2', x(radius * 3))
+  .attr('y2', x(0))
+  .attr('transform', 'translate(' + x(-radius) + ','+ x(radius) + ')')
+
+track.append('line')
+  .attr('class', 'track')
+  .attr('x1', x(radius))
+  .attr('y1', x(0))
+  .attr('x2', x(radius * 3))
+  .attr('y2', x(0))
+  .attr('transform', 'translate(' + x(-radius) + ','+ x(-radius) + ')')
+
+    </script>
+  </body>
+</html>
